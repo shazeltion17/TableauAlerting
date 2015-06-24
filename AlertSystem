@@ -1,0 +1,179 @@
+__author__ = 'mladid'
+import csv
+import os.path
+from os import remove
+from shutil import move
+from time import sleep
+import time,threading,random
+
+
+global columnOfCSV
+global columnOfName
+global columnOfEmail
+global emailOfAdmin
+
+
+### ALL THE CSV FILES HAVE TO BE CLOSED, OTHERWISE PYTHON CANNOT WORK ON THESE ###
+
+## Variables to be changed by user ##
+
+username            = ""  #Tableau Server Username
+password            = ""  #Tableau Server Password
+
+currentDirectory    = "C:\Program Files (x86)\Tableau\Tableau Server\9.0/\/bin"
+oldFileName         = "whoHitQuotaOld.csv"
+newFileName         = "whoHitQuotaNew.csv"
+oldFileNameComplete = currentDirectory+"\\"+oldFileName
+newFileNameComplete = currentDirectory+"\\"+newFileName
+pathToDashboard     = "Utilization_0/Resource"  #Path to dashboard you want to export
+pathToPNGDashboard  = "Utilization/Utilization" #Path to dashboard you want an image sent of
+fileNamePNG         = "DashboardPNG.png"        
+emailFileName       = "emailTemplate.html"
+linkToDashboard     = "http://alpo/#/views/Utilization_0/Resource"  #Link to dashboard you are going to export.
+columnOfCSV         =  4  #Find which column(starting at 0) contains the True/False value  in our example it is 4
+columnOfName        =  1  #Find which column(starting at 0) contains the Name value.  In our example it is 1
+columnOfEmail       =  0  #Find which column(starting at 0) contains the Email value.  In our example it is 0
+emailOfAdmin        =  'gharward@tableau.com'
+
+
+## This function checks the old version of the CSV ##
+
+whoHitQuotaBefore   = []
+def getOldList():
+    os.chdir(currentDirectory) #\\ escapes spaces in file path
+    with open(oldFileNameComplete) as csvfile:
+        fileReader = csv.reader(csvfile,delimiter=",",quotechar="|")
+        counter = 1
+        for row in fileReader:
+            if(counter!=1):
+                if(row[columnOfCSV] == "1"):  #row[4] signifies we are looking at the 5th column in the CSV file
+                    whoHitQuotaBefore.append(row[columnOfName])
+            counter +=1
+        return(whoHitQuotaBefore)
+
+
+## This function checks the version of the CSV that was just exported from Tableau Server ##
+
+whoHitQuotaNew  = []
+def getNewList():
+    os.chdir(currentDirectory) #\\ escapes spaces in file path
+    with open(newFileNameComplete) as csvfile:
+        fileReader = csv.reader(csvfile,delimiter=",",quotechar="|")
+        counter = 1
+        for row in fileReader:
+            if(counter!=1):
+                if(row[columnOfCSV]  == "1"):
+                    whoHitQuotaNew.append(row[columnOfName])
+            counter +=1
+        return(whoHitQuotaNew)
+
+def getDifference(oldList,newList):
+    return(list(set(newList) - set(oldList)))
+
+## This function grabs the email of the user that hit quota
+
+emailnew = []
+def getNewEmail():
+    os.chdir(currentDirectory) #\\ escapes spaces in file path
+    with open(newFileNameComplete) as csvfile:
+        fileReader = csv.reader(csvfile,delimiter=",",quotechar="|")
+        counter = 1
+        for row in fileReader:
+            if(counter!=1):
+                if(row[columnOfCSV]  == "1"):
+                    emailnew.append(row[columnOfEmail])
+            counter +=1
+        return(emailnew)
+
+def getOldEmail():
+    os.chdir(currentDirectory) #\\ escapes spaces in file path
+    with open(oldFileNameComplete) as csvfile:
+        fileReader = csv.reader(csvfile,delimiter=",",quotechar="|")
+        counter = 1
+        for row in fileReader:
+            if(counter!=1):
+                if(row[columnOfCSV]  == "1"):
+                    emailnew.append(row[columnOfEmail])
+            counter +=1
+        return(emailnew)
+
+def getDifference(oldList,newList):
+    return(list(set(newList) - set(oldList)))
+
+
+## This function exports the CSV from Tableau Server ##
+
+def getBenchmarksFromServer():
+    os.chdir(currentDirectory) #\\ escapes spaces in file path
+    os.system("tabcmd login -s http://alpo -u " + username + " -p " + password)
+    os.system('tabcmd export ' + pathToDashboard + ' --csv -f ' + newFileName)
+
+
+def getPicture():
+    os.system("tabcmd export " + pathToPNGDashboard + " -png -f " + fileNamePNG)
+
+## This function sends the report to the desired email addresses. ## -- febootimail.exe needs to be in same folder, needs to be installed
+
+def generateHTML(difference):
+    bodyWhoHitQuota = "<ul>"
+    for item in difference:
+        bodyWhoHitQuota += "<li>" + item + "</li>"
+    bodyWhoHitQuota += "</ul>"
+    return("""<html>
+        <head>
+            <title>
+                Email Alert
+            </title>
+        </head>
+        <body>
+            <h3>
+                Well done on hitting your quota!!
+            </h3>
+            """ + bodyWhoHitQuota + """
+            <a href='""" + linkToDashboard + """'><img src='""" + fileNamePNG + """'/></a>
+            <br/>
+            <br/>
+            Best regards,
+            <br/>
+            <br/>
+            Tableau Software
+        </body>
+    </html>""")
+
+def createHTMLfile(difference):
+    os.chdir(currentDirectory)
+    file = open(emailFileName, 'w+')
+    file.write(generateHTML(difference))
+    file.close()
+
+difference = []
+def sendMessage(xx,yy):
+    os.chdir(currentDirectory)
+
+    # Change the to email addresses in order to hav the appropriate administrators.  # %s represents the email address of the user that hit quota.  This should
+
+    command = 'febootimail.exe -SMTP smarthost.tsi.lan -TO sehrlich@tableau.com;%s;%s  -FROM sehrlich@tableau.com -SUBJECT "Congratulations %s for hitting quota!" -HTMLFILE %s' %(emailOfAdmin,xx,yy,emailFileName)
+    os.system(command)
+
+
+## Main Code Block ##
+
+if not os.path.isfile(oldFileNameComplete):
+    os.chdir(currentDirectory)
+    os.system("tabcmd login -s http://alpo -u " + username + " -p " + password)
+    os.system('tabcmd export ' + pathToDashboard + ' --csv -f ' + oldFileName)
+
+getBenchmarksFromServer()
+
+difference  = getDifference(getOldList(),getNewList())
+
+emailListdifference = getDifference(getNewEmail(),getOldEmail())
+
+for i in range(len(difference)):
+    getPicture()
+    createHTMLfile(difference)
+    sendMessage(str(emailListdifference[i]),str(difference[i]))
+
+    if i == len(difference):
+        remove(oldFileNameComplete)
+        os.rename(newFileNameComplete, oldFileNameComplete)
