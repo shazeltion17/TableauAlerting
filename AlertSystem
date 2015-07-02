@@ -17,8 +17,8 @@ global emailOfAdmin
 
 ## Variables to be changed by user ##
 
-username            = ""  #Tableau Server Username
-password            = ""  #Tableau Server Password
+username            = "sehrlich"  #Tableau Server Username
+password            = "Baller123!" #Tableau Server Password
 
 currentDirectory    = "C:\Program Files (x86)\Tableau\Tableau Server\9.0/\/bin"
 oldFileName         = "whoHitQuotaOld.csv"
@@ -39,6 +39,8 @@ emailOfAdmin        =  'gharward@tableau.com'
 ## This function checks the old version of the CSV ##
 
 whoHitQuotaBefore   = []
+emailnew = []
+emailold = []
 def getOldList():
     os.chdir(currentDirectory) #\\ escapes spaces in file path
     with open(oldFileNameComplete) as csvfile:
@@ -48,8 +50,9 @@ def getOldList():
             if(counter!=1):
                 if(row[columnOfCSV] == "1"):  #row[4] signifies we are looking at the 5th column in the CSV file
                     whoHitQuotaBefore.append(row[columnOfName])
+                    emailold.append(row[columnOfEmail])
             counter +=1
-        return(whoHitQuotaBefore)
+        return(whoHitQuotaBefore,emailold)
 
 
 ## This function checks the version of the CSV that was just exported from Tableau Server ##
@@ -64,42 +67,14 @@ def getNewList():
             if(counter!=1):
                 if(row[columnOfCSV]  == "1"):
                     whoHitQuotaNew.append(row[columnOfName])
+                    emailnew.append(row[columnOfEmail])
             counter +=1
-        return(whoHitQuotaNew)
+        return(whoHitQuotaNew, emailnew)
 
 def getDifference(oldList,newList):
     return(list(set(newList) - set(oldList)))
 
 ## This function grabs the email of the user that hit quota
-
-emailnew = []
-def getNewEmail():
-    os.chdir(currentDirectory) #\\ escapes spaces in file path
-    with open(newFileNameComplete) as csvfile:
-        fileReader = csv.reader(csvfile,delimiter=",",quotechar="|")
-        counter = 1
-        for row in fileReader:
-            if(counter!=1):
-                if(row[columnOfCSV]  == "1"):
-                    emailnew.append(row[columnOfEmail])
-            counter +=1
-        return(emailnew)
-
-def getOldEmail():
-    os.chdir(currentDirectory) #\\ escapes spaces in file path
-    with open(oldFileNameComplete) as csvfile:
-        fileReader = csv.reader(csvfile,delimiter=",",quotechar="|")
-        counter = 1
-        for row in fileReader:
-            if(counter!=1):
-                if(row[columnOfCSV]  == "1"):
-                    emailnew.append(row[columnOfEmail])
-            counter +=1
-        return(emailnew)
-
-def getDifference(oldList,newList):
-    return(list(set(newList) - set(oldList)))
-
 
 ## This function exports the CSV from Tableau Server ##
 
@@ -165,15 +140,19 @@ if not os.path.isfile(oldFileNameComplete):
 
 getBenchmarksFromServer()
 
-difference  = getDifference(getOldList(),getNewList())
+a , b  = getNewList()
+newDict = dict(zip(a,b))
+c , d = getOldList()
+oldDict = dict(zip(c,d))
 
-emailListdifference = getDifference(getNewEmail(),getOldEmail())
+diff = list(set(newDict.keys()) -  set(oldDict.keys()))
 
-for i in range(len(difference)):
+
+for i in range(len(diff)):
     getPicture()
-    createHTMLfile(difference)
-    sendMessage(str(emailListdifference[i]),str(difference[i]))
+    createHTMLfile(diff)
+    sendMessage(str(newDict[diff[i]]),str(diff[i]))
 
-    if i == len(difference):
-        remove(oldFileNameComplete)
-        os.rename(newFileNameComplete, oldFileNameComplete)
+
+remove(oldFileNameComplete)
+os.rename(newFileNameComplete, oldFileNameComplete)
